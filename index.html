@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NEON DRIFT</title>
+<style>
+:root{color-scheme:dark;--cyan:#5ffcff;--pink:#ff4fc8;--bg:#070a18}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#17183a,var(--bg) 70%);color:#eefaff;font:16px system-ui,sans-serif;min-height:100vh;display:grid;place-items:center}
+main{width:min(960px,96vw);padding:18px}header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}h1{font-size:clamp(1.7rem,5vw,3rem);letter-spacing:.18em;margin:0;color:var(--cyan);text-shadow:0 0 18px #21d9ff88}.stats{display:flex;gap:18px;flex-wrap:wrap}.stat{color:#aebbd7;font-size:.85rem}.stat b{color:#fff;font-size:1.15rem;margin-left:5px}canvas{display:block;width:100%;aspect-ratio:16/9;background:#080c1c;border:1px solid #4deaff88;border-radius:12px;box-shadow:0 0 35px #0adfff22;margin-top:14px;touch-action:none}.bar{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:12px;color:#b5c6e9;font-size:.9rem}button{border:1px solid var(--cyan);background:#0b2033;color:var(--cyan);padding:9px 15px;border-radius:8px;font:inherit;font-weight:700;cursor:pointer}button:hover{background:#12334a}.help{opacity:.8}#overlay{position:relative}#message{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none;text-shadow:0 2px 12px #000}#message h2{font-size:clamp(1.6rem,5vw,3rem);color:var(--pink);margin:0 0 8px;letter-spacing:.12em}#message p{margin:0;line-height:1.6}.mobile{display:none;gap:8px;justify-content:center;margin-top:12px}.mobile button{min-width:52px;min-height:44px;touch-action:none}@media(max-width:650px){.mobile{display:flex}.help{width:100%}}
+</style>
+</head>
+<body><main>
+<header><h1>NEON DRIFT</h1><div class="stats"><div class="stat">SCORE <b id="score">0</b></div><div class="stat">BEST <b id="best">0</b></div><div class="stat">SHIELDS <b id="lives">3</b></div></div></header>
+<div id="overlay"><canvas id="game" width="960" height="540" aria-label="Neon Drift game"></canvas><div id="message"><h2>READY?</h2><p>Collect cyan shards. Avoid the red hunters.<br>Press SPACE or tap START to begin.</p></div></div>
+<div class="bar"><span class="help">Move: WASD / arrow keys · Pause: P · Restart: R</span><div><button id="start">START</button> <button id="pause">PAUSE</button></div></div>
+<div class="mobile"><button data-key="ArrowUp">▲</button></div><div class="mobile"><button data-key="ArrowLeft">◀</button><button data-key="ArrowDown">▼</button><button data-key="ArrowRight">▶</button></div>
+</main>
+<script>
+(()=> {
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+const scoreEl=document.getElementById('score'),bestEl=document.getElementById('best'),livesEl=document.getElementById('lives'),message=document.getElementById('message');
+const W=canvas.width,H=canvas.height;
+let keys={},player,shards,hunters,particles,score,lives,playing=false,paused=false,over=false,last=0,spawn=0;
+let best=Number(localStorage.getItem('neonDriftBest')||0);bestEl.textContent=best;
+const rand=(a,b)=>a+Math.random()*(b-a),dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+function reset(){player={x:W/2,y:H/2,r:13,speed:255,invuln:0};shards=[];hunters=[];particles=[];score=0;lives=3;spawn=0;for(let i=0;i<7;i++)newShard();hunters.push({x:70,y:70,r:15,speed:75});playing=true;paused=false;over=false;updateUI();message.style.display='none';}
+function newShard(){let s={x:rand(30,W-30),y:rand(30,H-30),r:8,phase:rand(0,6.28)};if(player&&dist(s,player)<80){s.x=rand(30,W-30);s.y=rand(30,H-30)}shards.push(s)}
+function updateUI(){scoreEl.textContent=score;livesEl.textContent=lives;bestEl.textContent=best}
+function burst(x,y,color,n=12){for(let i=0;i<n;i++){let a=rand(0,Math.PI*2),v=rand(40,190);particles.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:rand(.25,.7),max:.7,color})}}
+function start(){reset();last=performance.now()}
+function end(){playing=false;over=true;message.style.display='flex';message.innerHTML='<h2>SYSTEM FAILURE</h2><p>Final score: '+score+'<br>Press R or tap START to try again.</p>'}
+function tick(t){let dt=Math.min((t-last)/1000||0,.033);last=t;if(playing&&!paused)update(dt,t/1000);draw(t/1000);requestAnimationFrame(tick)}
+function update(dt,time){
+if(keys.p||keys.P){keys.p=keys.P=false;paused=true;message.style.display='flex';message.innerHTML='<h2>PAUSED</h2><p>Press P or tap PAUSE to continue.</p>'}
+let dx=(keys.ArrowRight||keys.d||keys.D?1:0)-(keys.ArrowLeft||keys.a||keys.A?1:0),dy=(keys.ArrowDown||keys.s||keys.S?1:0)-(keys.ArrowUp||keys.w||keys.W?1:0),len=Math.hypot(dx,dy)||1;
+player.x=Math.max(player.r,Math.min(W-player.r,player.x+dx/len*player.speed*dt));player.y=Math.max(player.r,Math.min(H-player.r,player.y+dy/len*player.speed*dt));player.invuln=Math.max(0,player.invuln-dt);
+for(let i=shards.length-1;i>=0;i--){let s=shards[i];if(dist(player,s)<player.r+s.r+2){burst(s.x,s.y,'#5ffcff',18);shards.splice(i,1);score+=10;if(score>best){best=score;localStorage.setItem('neonDriftBest',best)}newShard();updateUI()}}
+spawn+=dt;if(spawn>Math.max(1.8,5-score/180)){spawn=0;if(hunters.length<8)hunters.push({x:Math.random()<.5?rand(0,W): (Math.random()<.5?0:W),y:Math.random()<.5?0:H,r:13,speed:rand(65,90)+score*.12})}
+for(let h of hunters){let d=dist(player,h)||1;h.x+=(player.x-h.x)/d*h.speed*dt;h.y+=(player.y-h.y)/d*h.speed*dt;if(d<player.r+h.r&&player.invuln<=0){lives--;player.invuln=1.6;burst(player.x,player.y,'#ff4fc8',25);updateUI();if(lives<=0){end();return}}}
+for(let i=particles.length-1;i>=0;i--){let p=particles[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;if(p.life<=0)particles.splice(i,1)}
+}
+function draw(time){
+ctx.clearRect(0,0,W,H);ctx.fillStyle='#080c1c';ctx.fillRect(0,0,W,H);
+ctx.strokeStyle='#172442';ctx.lineWidth=1;for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+for(let i=0;i<65;i++){let x=(i*173)%W,y=(i*97)%H;ctx.fillStyle='rgba(155,200,255,.25)';ctx.fillRect(x,y,2,2)}
+for(let s of shards){let pulse=1+Math.sin(time*5+s.phase)*.18;ctx.save();ctx.translate(s.x,s.y);ctx.rotate(time*1.5);ctx.scale(pulse,pulse);ctx.shadowBlur=22;ctx.shadowColor='#5ffcff';ctx.fillStyle='#5ffcff';ctx.beginPath();ctx.moveTo(0,-s.r);ctx.lineTo(s.r,0);ctx.lineTo(0,s.r);ctx.lineTo(-s.r,0);ctx.closePath();ctx.fill();ctx.restore()}
+for(let h of hunters){ctx.shadowBlur=22;ctx.shadowColor='#ff315d';ctx.fillStyle='#ff315d';ctx.beginPath();ctx.arc(h.x,h.y,h.r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle='#ffd4e0';ctx.stroke()}
+for(let p of particles){ctx.globalAlpha=Math.max(0,p.life/p.max);ctx.fillStyle=p.color;ctx.fillRect(p.x,p.y,4,4)}ctx.globalAlpha=1;
+if(player){ctx.save();ctx.translate(player.x,player.y);ctx.rotate(Math.atan2((keys.ArrowDown||keys.s?1:0)-(keys.ArrowUp||keys.w?1:0),(keys.ArrowRight||keys.d?1:0)-(keys.ArrowLeft||keys.a?1:0)));ctx.globalAlpha=player.invuln>0&&Math.floor(time*14)%2===0?.35:1;ctx.shadowBlur=24;ctx.shadowColor='#5ffcff';ctx.fillStyle='#5ffcff';ctx.beginPath();ctx.moveTo(17,0);ctx.lineTo(-10,-11);ctx.lineTo(-6,0);ctx.lineTo(-10,11);ctx.closePath();ctx.fill();ctx.restore()}
+if(paused){ctx.fillStyle='#080c1ccc';ctx.fillRect(0,0,W,H)}
+}
+document.addEventListener('keydown',e=>{keys[e.key]=true;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();if(e.key===' '&&!playing)start();if((e.key==='r'||e.key==='R')&&(!playing||over))start();if((e.key==='p'||e.key==='P')&&playing){paused=!paused;message.style.display=paused?'flex':'none';if(paused)message.innerHTML='<h2>PAUSED</h2><p>Press P or tap PAUSE to continue.</p>'}});
+document.addEventListener('keyup',e=>{keys[e.key]=false});
+document.getElementById('start').onclick=start;document.getElementById('pause').onclick=()=>{if(!playing)return;paused=!paused;message.style.display=paused?'flex':'none';if(paused)message.innerHTML='<h2>PAUSED</h2><p>Press P or tap PAUSE to continue.</p>'};
+document.querySelectorAll('[data-key]').forEach(b=>{let k=b.dataset.key;b.addEventListener('pointerdown',e=>{e.preventDefault();keys[k]=true});for(let ev of ['pointerup','pointercancel','pointerleave'])b.addEventListener(ev,()=>keys[k]=false)});
+requestAnimationFrame(tick);
+})();
+</script></body></html>
